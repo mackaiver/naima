@@ -6,7 +6,6 @@ import numpy as np
 import astropy.units as u
 from astropy.extern import six
 from astropy import log
-from functools import partial
 from emcee import autocorr
 
 from .utils import sed_conversion, validate_data_table
@@ -333,6 +332,10 @@ def _process_blob(sampler, modelidx, last_step=False, energy=None):
     return modelx, model
 
 
+def _rpartial(func, *args):
+    return lambda *a: func(*(a + args))
+
+
 def _read_or_calc_samples(sampler,
                           modelidx=0,
                           n_samples=100,
@@ -361,12 +364,13 @@ def _read_or_calc_samples(sampler,
         # init pool and select parameters
         chain = sampler.chain[-1] if last_step else sampler.flatchain
         pars = chain[np.random.randint(len(chain), size=n_samples)]
+        args = ((p, data) for p in pars)
         blobs = []
 
-        p = Pool(threads)
-        modelouts = p.map(partial(sampler.modelfn, data=data), pars)
-        p.close()
-        p.terminate()
+        pool = Pool(threads)
+        modelouts = pool.starmap(sampler.modelfn, args)
+        pool.close()
+        pool.terminate()
 
         for modelout in modelouts:
             if isinstance(modelout, np.ndarray):

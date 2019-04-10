@@ -22,6 +22,8 @@ import os
 from astropy.utils.data import get_pkg_data_filename
 import warnings
 import logging
+import numexpr as ne
+
 
 # Constants and units
 from astropy import units as u
@@ -665,19 +667,20 @@ class InverseCompton(BaseElectron):
         photE0 = photE0[:, None, None]
         phn = phn[:, None, None]
 
-        b = 4 * photE0 * electron_energy
-        w = gamma_energy / electron_energy
-        q = w / (b * (1 - w))
-        fic = (
-            2 * q * np.log(q)
-            + (1 + 2 * q) * (1 - q)
-            + (1.0 / 2.0) * (b * q) ** 2 * (1 - q) / (1 + b * q)
-        )
+        #b = 4 * photE0 * electron_energy
+        #w = gamma_energy / electron_energy
+        q = ne.evaluate('(gamma_energy / electron_energy) / ((4 * photE0 * electron_energy) * (1 - (gamma_energy / electron_energy)))')
+        fic = ne.evaluate('2*q*log(q) +  (1 + 2 * q) * (1 - q) + (1.0 / 2.0) * ((4 * photE0 * electron_energy) * q) ** 2 * (1 - q) / (1 + (4 * photE0 * electron_energy) * q)')
+        # fic = (
+        #     2 * q * np.log(q)
+        #     + (1 + 2 * q) * (1 - q)
+        #     + (1.0 / 2.0) * (b * q) ** 2 * (1 - q) / (1 + b * q)
+        # )
 
         gamint = (
             fic
             * heaviside(1 - q)
-            * heaviside(q - 1.0 / (4 * electron_energy ** 2))
+            * heaviside(ne.evaluate('q - 1.0 / (4 * electron_energy ** 2)'))
         )
         gamint[np.isnan(gamint)] = 0.0
 
@@ -696,7 +699,7 @@ class InverseCompton(BaseElectron):
         sigt = 6.652458734983284e-25
         c = 29979245800.0
 
-        gamint *= (3.0 / 4.0) * sigt * c / electron_energy ** 2
+        gamint *= ne.evaluate('(3.0 / 4.0) * sigt * c / electron_energy ** 2')
 
         return gamint
 

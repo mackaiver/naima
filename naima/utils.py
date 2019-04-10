@@ -13,6 +13,7 @@ from astropy import log
 import warnings
 import ast
 from .extern.validator import validate_array, validate_scalar
+import numexpr as ne
 
 __all__ = [
     "generate_energy_edges",
@@ -343,21 +344,30 @@ def trapz_loglog(y, x, axis=-1, intervals=False):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         # Compute the power law indices in each integration bin
-        b = np.log10(y[slice2] / y[slice1]) / np.log10(x[slice2] / x[slice1])
+        #
+        y2 = y[slice2]
+        y1 = y[slice1]
+
+        x1 = x[slice1]
+        x2 = x[slice2]
+        b = ne.evaluate('log10(y2 / y1) / log10(x2 / x1)')
+        #b = np.log10(y[slice2] / y[slice1]) / np.log10(x[slice2] / x[slice1])
 
         # if local powerlaw index is -1, use \int 1/x = log(x); otherwise use
         # normal powerlaw integration
-        trapzs = np.where(
-            np.abs(b + 1.0) > 1e-10,
-            (
-                y[slice1]
-                * (x[slice2] * (x[slice2] / x[slice1]) ** b - x[slice1])
-            )
-            / (b + 1),
-            x[slice1] * y[slice1] * np.log(x[slice2] / x[slice1]),
-        )
+        s = 'where(abs(b + 1.0) > 1e-10, (y1 * (x2 * (x2 / x1)**b - x1))/(b + 1), x1 * y1 * log(x2/x1))'
+        trapzs = ne.evaluate(s)
+        # trapzs = np.where(
+        #     np.abs(b + 1.0) > 1e-10,
+        #     (
+        #         y[slice1]
+        #         * (x[slice2] * (x[slice2] / x[slice1]) ** b - x[slice1])
+        #     )
+        #     / (b + 1),
+        #     x[slice1] * y[slice1] * np.log(x[slice2] / x[slice1]),
+        # )
 
-    tozero = (y[slice1] == 0.0) + (y[slice2] == 0.0) + (x[slice1] == x[slice2])
+    tozero = (y1 == 0.0) + (y2 == 0.0) + (x1 == x2)
     trapzs[tozero] = 0.0
 
     if intervals:
